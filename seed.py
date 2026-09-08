@@ -25,11 +25,11 @@ def seed_database():
         # 1. Create Administrator
         admin = User(
             full_name="Prof. Sarah Jenkins",
-            email="admin@portal.edu",
+            email="admin@gmail.com",
             role=User.ROLE_ADMIN,
             bio="Lead Distributed Systems Instructor & Cloud Architecture Evaluator.",
         )
-        admin.set_password("Admin@12345")
+        admin.set_password("Admin@123")
         db.session.add(admin)
         db.session.flush()
 
