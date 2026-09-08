@@ -16,7 +16,6 @@ Built with **Flask**, **PostgreSQL**, **Redis**, **Docker**, and a **React + Typ
 </div>
 
 ---
-
 ## 📖 Table of Contents
 
 - [Overview](#-overview)
