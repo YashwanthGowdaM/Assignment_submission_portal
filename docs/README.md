@@ -1,7 +1,3 @@
-<div align="center">
-
-<img src="./media/project-design.png" width="100%" alt="Architecture">
-
 # 🎓 Assignment Submission Portal
 
 **A full-stack, containerized platform for managing group assignments, submissions, and academic review workflows.**
@@ -15,7 +11,7 @@ Built with **Flask**, **PostgreSQL**, **Redis**, **Docker**, and a **React + Typ
 [![React](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![License](https://img.shields.io/badge/License-Educational-lightgrey)]()
 
-🔗 **[Live Demo → http://129.159.237.133/](http://129.159.237.133/)**
+🌐 **Live Demo:** http://129.159.237.133/
 
 </div>
 
@@ -59,9 +55,27 @@ The system was designed to demonstrate **production-grade infrastructure practic
 
 ## 🖥️ Live Preview
 
-| Sign-In | Student Dashboard | Admin Dashboard |
-|---|---|---|
-| ![Login](media/Login%20Page.png) | ![Student Dashboard](media/student_landing_pages.png) | ![Admin Dashboard](media/admin_landing_page.png) |
+<table align="center">
+<tr>
+<th>Sign-In</th>
+<th>Student Dashboard</th>
+<th>Admin Dashboard</th>
+</tr>
+
+<tr>
+<td align="center">
+<img src="../media/login-page.png" width="300">
+</td>
+
+<td align="center">
+<img src="../media/student-dashboard.png" width="300">
+</td>
+
+<td align="center">
+<img src="../media/admin-dashboard.png" width="300">
+</td>
+</tr>
+</table>
 
 > 🔗 Try it live: **[http://129.159.237.133/](http://129.159.237.133/)**
 
@@ -78,7 +92,9 @@ The system was designed to demonstrate **production-grade infrastructure practic
 The diagram below (`media/project_Design.png`) is the single source of truth for how every layer of this system fits together — request flow, authentication flow, database schema, Redis caching, and deployment workflow are all mapped out visually.
 
 <p align="center">
-  <img src="media/project_Design.png" alt="Full architecture diagram" width="95%" />
+  <img src="../media/project-design.png"
+       alt="Assignment Submission Portal Architecture"
+       width="100%">
 </p>
 
 **Request lifecycle, in short:**
@@ -303,6 +319,7 @@ All three containers (frontend, backend, Redis) need to talk to each other by na
 
 ```bash
 docker network create assignment-net
+docker network ls
 ```
 
 ### Step 5 — Build the images
@@ -358,10 +375,13 @@ docker run -d \
 ### Step 10 — Verify everything is running
 
 ```bash
+docker images
+docker ps 
+docker network inspect assignment-net
+docker exec -it assignment-redis redis-cli PING
 docker logs assignment-backend
 docker logs assignment-frontend
 docker logs assignment-redis
-docker ps
 ```
 
 Then open your browser to:
