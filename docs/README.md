@@ -502,7 +502,7 @@ This project was built and refined with the help of the following AI tools:
 | **ChatGPT** | Prompt optimization & error handling strategy |
 | **Google AI Studio** | Application coding |
 | **Claude AI** | Report writing & error fixes |
-
+| **Author** | https://github.com/YashwanthGowdaM |
 ---
 
 <div align="center">
