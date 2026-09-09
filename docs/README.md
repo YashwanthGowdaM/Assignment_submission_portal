@@ -130,83 +130,150 @@ The diagram below (`media/project_Design.png`) is the single source of truth for
 
 ```text
 Assignment_submission_portal-main/
-├── backend/                          # Flask API service
-│   ├── app/
-│   │   ├── __init__.py               # create_app() factory: registers extensions, blueprints, filters
-│   │   ├── extensions.py             # db, migrate, login_manager, csrf, Redis client initialization
-│   │   ├── forms/                    # WTForms definitions (server-side validated forms)
-│   │   │   ├── auth_forms.py         # Login, Register, ForgotPassword, ResetPassword, Profile forms
-│   │   │   ├── assignment_forms.py   # Create/Edit assignment forms (title, type, group size, due date)
-│   │   │   └── submission_forms.py   # Repo URL / Docs URL / remarks submission form
-│   │   ├── models/                   # SQLAlchemy ORM models (see Data Model section below)
-│   │   │   ├── user.py               # User model — admin & student roles, password hashing
-│   │   │   ├── assignment.py         # Assignment model — type, capacity, status lifecycle
-│   │   │   ├── group.py              # Group + GroupMember — team formation & capacity logic
-│   │   │   ├── submission.py         # Submission model — review workflow (pending/approved/rejected)
-│   │   │   └── audit_log.py          # AuditLog — immutable trail of admin/system actions
-│   │   ├── routes/                   # Flask Blueprints (HTTP layer only — no business logic)
-│   │   │   ├── main.py               # `/` landing redirect, `/health` health-check endpoint
-│   │   │   ├── auth.py                # login, register, logout, forgot/reset password, profile
-│   │   │   ├── admin.py               # dashboard, assignments CRUD, students, groups, submissions review, statistics
-│   │   │   └── student.py             # dashboard, browse assignments, join/leave group, submit work, my submissions
-│   │   ├── services/                  # Business logic layer — keeps routes thin
-│   │   │   ├── auth_service.py        # Registration, password-reset token generation/verification
-│   │   │   ├── assignment_service.py  # Assignment lifecycle (open/full/closed transitions)
-│   │   │   ├── submission_service.py  # Submission creation & review logic
-│   │   │   ├── stats_service.py       # Aggregation queries for dashboards & analytics
-│   │   │   └── cache_service.py       # Redis get/set/delete helpers + cache-key namespacing
-│   │   └── utilities/
-│   │       ├── decorators.py          # @admin_required / @student_required route guards
-│   │       ├── errors.py              # Centralized error handlers (400/403/404/500)
-│   │       └── helpers.py             # Jinja filters (datetime formatting, status badges), safe-URL check
-│   ├── config.py                      # Development / Testing / Production config classes
-│   ├── run.py                         # WSGI entry point used by Gunicorn (`run:app`)
-│   ├── requirements.txt               # Pinned Python dependencies
-│   └── Dockerfile                     # Backend container image (Python 3.12-slim + Gunicorn)
-│
-├── frontend/                           # Server-rendered UI + static assets
-│   ├── templates/
-│   │   ├── base.html                   # Shared layout, nav bar, flash messages
-│   │   ├── auth/                       # login.html, register.html, forgot/reset password, profile.html
-│   │   ├── admin/                      # dashboard, assignment CRUD, students, groups, submissions, statistics
-│   │   ├── student/                    # dashboard, assignments list/detail, submissions list/submit
-│   │   └── errors/                     # 400.html, 403.html, 404.html, 500.html
-│   ├── static/                         # CSS / JS / images served directly by Nginx
-│   ├── nginx.conf                      # Reverse-proxy rules: /static/* served locally, everything else → backend
-│   └── Dockerfile                      # Frontend container image (Nginx-Alpine)
-│
-├── src/                                 # React + TypeScript SPA variant (analytics-heavy admin views)
-│   ├── App.tsx                          # Root component & view router
-│   ├── components/                      # DashboardView, AssignmentsView, GroupsView, SubmissionsView,
-│   │                                     #   AnalyticsView, Header, Sidebar, modals, etc.
-│   ├── data.ts / types.ts               # Mock data & shared TypeScript interfaces
-│   └── main.tsx / index.css             # Vite entry point & global styles
-│
-├── database/
-│   └── migrations/                      # Alembic migration environment (env.py, versions/, script.py.mako)
-│
-├── tests/                               # Pytest suite
-│   ├── conftest.py                      # Test app factory, fixtures (client, sample users, sample data)
-│   ├── test_auth.py                     # Registration, login, duplicate-email rejection
-│   ├── test_assignments.py              # Assignment CRUD & status transitions
-│   ├── test_groups_and_locking.py       # Group capacity, locking, and concurrency edge cases
-│   └── test_submissions.py              # Submission creation & admin review flow
-│
-├── docs/
-│   └── README.md                        # Original infra quick-reference (kept for history)
-│
-├── media/                                # Screenshots & architecture diagram used in this README
-│   ├── project_Design.png
-│   ├── Login Page.png
-│   ├── admin_landing_page.png
-│   └── student_landing_pages.png
-│
-├── seed.py                               # Populates demo admin/students/assignments/groups/submissions
-├── alembic.ini                           # Alembic configuration (points at database/migrations)
-├── docker-install.sh                     # One-shot script: installs Docker + Docker Compose on Ubuntu
-├── .env.example                          # Template for all required environment variables
-├── package.json / vite.config.ts / tsconfig.json   # React SPA build tooling
-└── metadata.json                         # App metadata (name, description, capabilities)
+.
+├── alembic.ini                              # Alembic configuration file (tells Alembic where migrations are and how to run them)
+
+├── backend
+│   ├── Dockerfile                           # Builds the backend Docker image
+│   ├── app
+│   │   ├── __init__.py                      # Creates and initializes the Flask application
+│   │   ├── extensions.py                    # Initializes shared extensions (SQLAlchemy, LoginManager, etc.)
+│   │   ├── forms
+│   │   │   ├── __init__.py                  # Makes forms a Python package
+│   │   │   ├── assignment_forms.py          # Assignment create/edit form definitions
+│   │   │   ├── auth_forms.py                # Login, registration and authentication forms
+│   │   │   └── submission_forms.py          # Assignment submission forms
+│   │   ├── models
+│   │   │   ├── __init__.py                  # Imports and registers all database models
+│   │   │   ├── assignment.py                # Assignment database table/model
+│   │   │   ├── audit_log.py                 # Stores user activity logs
+│   │   │   ├── group.py                     # Student group database model
+│   │   │   ├── submission.py                # Assignment submission database model
+│   │   │   └── user.py                      # User database model
+│   │   ├── routes
+│   │   │   ├── __init__.py                  # Registers all route blueprints
+│   │   │   ├── admin.py                     # Admin URLs and request handling
+│   │   │   ├── auth.py                      # Authentication URLs
+│   │   │   ├── main.py                      # Common/Home page routes
+│   │   │   └── student.py                   # Student-related routes
+│   │   ├── services
+│   │   │   ├── __init__.py                  # Makes services a Python package
+│   │   │   ├── assignment_service.py        # Business logic for assignments
+│   │   │   ├── auth_service.py              # Authentication business logic
+│   │   │   ├── cache_service.py             # Cache management functions
+│   │   │   ├── stats_service.py             # Dashboard and statistics calculations
+│   │   │   └── submission_service.py        # Submission business logic
+│   │   └── utilities
+│   │       ├── __init__.py                  # Makes utilities a Python package
+│   │       ├── decorators.py                # Custom decorators (login required, admin only, etc.)
+│   │       ├── errors.py                    # Custom exception handling
+│   │       └── helpers.py                   # Reusable helper functions
+│   ├── config.py                            # Application configuration (DB, Secret Key, etc.)
+│   ├── requirements.txt                     # Python package dependencies
+│   └── run.py                               # Starts the Flask application
+
+├── database
+│   └── migrations
+│       ├── README                           # Explains how migrations work
+│       ├── alembic.ini                      # Alembic configuration specific to migration folder
+│       ├── env.py                           # Loads database settings for Alembic
+│       ├── script.py.mako                   # Template used when generating new migrations
+│       └── versions
+│           └── d69f3b0037d6_initial_schema.py   # Creates the initial database schema
+
+├── docker-install.sh                        # Installs Docker on a Linux server
+├── docs
+│   └── README.md                            # Project documentation
+
+├── entrypoint.sh                            # Container startup script
+
+├── frontend
+│   ├── Dockerfile                           # Builds frontend Docker image
+│   ├── nginx.conf                           # Nginx configuration to serve frontend
+│   ├── static
+│   │   ├── css
+│   │   │   └── custom.css                   # Custom styling
+│   │   └── js
+│   │       ├── dashboard.js                 # Dashboard JavaScript
+│   │       └── main.js                      # Common frontend JavaScript
+│   └── templates
+│       ├── admin
+│       │   ├── assignments
+│       │   │   ├── create.html              # Create assignment page
+│       │   │   ├── detail.html              # View assignment details
+│       │   │   ├── edit.html                # Edit assignment page
+│       │   │   └── list.html                # Assignment listing page
+│       │   ├── dashboard.html               # Admin dashboard
+│       │   ├── groups
+│       │   │   └── list.html                # Group management page
+│       │   ├── statistics.html              # Statistics page
+│       │   ├── students
+│       │   │   └── list.html                # Student management page
+│       │   └── submissions
+│       │       ├── list.html                # Submission listing
+│       │       └── review.html              # Review submissions page
+│       ├── auth
+│       │   ├── forgot_password.html         # Forgot password page
+│       │   ├── login.html                   # Login page
+│       │   ├── profile.html                 # User profile page
+│       │   ├── register.html                # Registration page
+│       │   └── reset_password.html          # Reset password page
+│       ├── base.html                        # Master HTML template used by all pages
+│       ├── errors
+│       │   ├── 400.html                     # Bad Request error page
+│       │   ├── 403.html                     # Forbidden error page
+│       │   ├── 404.html                     # Not Found error page
+│       │   └── 500.html                     # Internal Server Error page
+│       └── student
+│           ├── assignments
+│           │   ├── detail.html              # Assignment details for students
+│           │   └── list.html                # Student assignment list
+│           ├── dashboard.html               # Student dashboard
+│           └── submissions
+│               ├── list.html                # Student submission history
+│               └── submit.html              # Submit assignment page
+
+├── index.html                               # Main HTML entry point for Vite frontend
+
+├── media
+│   ├── admin-dashboard.png                  # Admin dashboard screenshot
+│   ├── login-page.png                       # Login page screenshot
+│   ├── project-design.png                   # Architecture/design image
+│   └── student-dashboard.png                # Student dashboard screenshot
+
+├── metadata.json                            # Project metadata/configuration
+
+├── package.json                             # Node.js dependencies and project scripts
+
+├── seed.py                                  # Populates database with sample/demo data
+
+├── src
+│   ├── App.tsx                              # Root React component
+│   ├── components
+│   │   ├── AnalyticsView.tsx                # Analytics page component
+│   │   ├── AssignmentDetailModal.tsx        # Assignment details popup
+│   │   ├── AssignmentsView.tsx              # Assignment management UI
+│   │   ├── CreateAssignmentModal.tsx        # Create assignment popup
+│   │   ├── DashboardView.tsx                # Dashboard component
+│   │   ├── GroupsView.tsx                   # Group management component
+│   │   ├── Header.tsx                       # Application header
+│   │   ├── Sidebar.tsx                      # Navigation sidebar
+│   │   └── SubmissionsView.tsx              # Submission management UI
+│   ├── data.ts                              # Sample/mock data
+│   ├── index.css                            # Global CSS styles
+│   ├── main.tsx                             # React application entry point
+│   └── types.ts                             # TypeScript type definitions
+
+├── tests
+│   ├── conftest.py                          # Common pytest fixtures and test setup
+│   ├── test_assignments.py                  # Tests assignment functionality
+│   ├── test_auth.py                         # Tests authentication
+│   ├── test_groups_and_locking.py           # Tests groups and record locking
+│   └── test_submissions.py                  # Tests submission functionality
+
+├── tsconfig.json                            # TypeScript compiler configuration
+
+└── vite.config.ts                           # Vite build and development server configuration
 ```
 
 ### Backend layer responsibilities, in plain English
@@ -354,8 +421,8 @@ docker run -d \
   assignment-backend:v1
 ```
 
-### Step 8 — Run migrations & seed demo data (first run only)
-
+### Step 8 — [Optional] Run migrations & seed demo data (first run only) 
+[Note: Only required if Data seeding not happened properly]
 ```bash
 docker exec -it assignment-backend flask db upgrade
 docker exec -it assignment-backend python seed.py
