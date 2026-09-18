@@ -415,7 +415,6 @@ docker run -d \
   --name assignment-backend \
   --network assignment-net \
   -p 5000:5000 \
-  -e SECRET_KEY="change-this-to-a-random-hex-string" \
   -e DATABASE_URL="postgresql://postgres.<project-id>:PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require" \
   -e REDIS_URL="redis://assignment-redis:6379/0" \
   assignment-backend:v1
