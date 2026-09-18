@@ -4,19 +4,27 @@ env:
   variables:
     AWS_DEFAULT_REGION: us-east-1
     AWS_ACCOUNT_ID: "003344631245"
+
     BACKEND_REPO_NAME: assignment-portal-backend
     FRONTEND_REPO_NAME: assignment-portal-frontend
+
     IMAGE_TAG: latest
 
 phases:
 
+  install:
+    commands:
+      - echo "==========================================="
+      - echo "INSTALL PHASE"
+      - echo "==========================================="
+      - docker --version
+      - aws --version
+
   pre_build:
     commands:
       - echo "==========================================="
-      - echo "Logging in to Amazon ECR..."
+      - echo "Logging into Amazon ECR"
       - echo "==========================================="
-
-      - aws --version
 
       - ACCOUNT_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
 
@@ -25,46 +33,56 @@ phases:
       - BACKEND_IMAGE_URI=$ACCOUNT_URI/$BACKEND_REPO_NAME
       - FRONTEND_IMAGE_URI=$ACCOUNT_URI/$FRONTEND_REPO_NAME
 
-      - echo Backend Image = $BACKEND_IMAGE_URI
-      - echo Frontend Image = $FRONTEND_IMAGE_URI
+      - echo "Backend Image URI : $BACKEND_IMAGE_URI"
+      - echo "Frontend Image URI: $FRONTEND_IMAGE_URI"
+
+      - echo "==========================================="
+      - echo "Repository Contents"
+      - echo "==========================================="
+      - pwd
+      - ls -la
+      - ls -la backend
+      - ls -la frontend
 
   build:
     commands:
       - echo "==========================================="
-      - echo "Building Backend Docker Image..."
+      - echo "Building Backend Docker Image"
       - echo "==========================================="
 
-      - docker build -t $BACKEND_REPO_NAME:latest ./backend
+      - docker build -f backend/Dockerfile -t $BACKEND_REPO_NAME:$IMAGE_TAG .
 
-      - docker tag $BACKEND_REPO_NAME:latest $BACKEND_IMAGE_URI:$IMAGE_TAG
+      - docker tag $BACKEND_REPO_NAME:$IMAGE_TAG $BACKEND_IMAGE_URI:$IMAGE_TAG
 
       - echo "==========================================="
-      - echo "Building Frontend Docker Image..."
+      - echo "Building Frontend Docker Image"
       - echo "==========================================="
 
-      - docker build -t $FRONTEND_REPO_NAME:latest ./frontend
+      - docker build -f frontend/Dockerfile -t $FRONTEND_REPO_NAME:$IMAGE_TAG ./frontend
 
-      - docker tag $FRONTEND_REPO_NAME:latest $FRONTEND_IMAGE_URI:$IMAGE_TAG
+      - docker tag $FRONTEND_REPO_NAME:$IMAGE_TAG $FRONTEND_IMAGE_URI:$IMAGE_TAG
 
   post_build:
     commands:
       - echo "==========================================="
-      - echo "Pushing Backend Image..."
+      - echo "Pushing Backend Image"
       - echo "==========================================="
 
       - docker push $BACKEND_IMAGE_URI:$IMAGE_TAG
 
       - echo "==========================================="
-      - echo "Pushing Frontend Image..."
+      - echo "Pushing Frontend Image"
       - echo "==========================================="
 
       - docker push $FRONTEND_IMAGE_URI:$IMAGE_TAG
 
       - echo "==========================================="
-      - echo "Generating image definitions..."
+      - echo "Creating imagedefinitions.json"
       - echo "==========================================="
 
       - printf '[{"name":"backend","imageUri":"%s"},{"name":"frontend","imageUri":"%s"}]' "$BACKEND_IMAGE_URI:$IMAGE_TAG" "$FRONTEND_IMAGE_URI:$IMAGE_TAG" > imagedefinitions.json
+
+      - cat imagedefinitions.json
 
 artifacts:
   files:
