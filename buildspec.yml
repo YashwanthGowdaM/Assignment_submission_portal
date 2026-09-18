@@ -1,0 +1,71 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: us-east-1
+    AWS_ACCOUNT_ID: "003344631245"
+    BACKEND_REPO_NAME: assignment-portal-backend
+    FRONTEND_REPO_NAME: assignment-portal-frontend
+    IMAGE_TAG: latest
+
+phases:
+
+  pre_build:
+    commands:
+      - echo "==========================================="
+      - echo "Logging in to Amazon ECR..."
+      - echo "==========================================="
+
+      - aws --version
+
+      - ACCOUNT_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ACCOUNT_URI
+
+      - BACKEND_IMAGE_URI=$ACCOUNT_URI/$BACKEND_REPO_NAME
+      - FRONTEND_IMAGE_URI=$ACCOUNT_URI/$FRONTEND_REPO_NAME
+
+      - echo Backend Image = $BACKEND_IMAGE_URI
+      - echo Frontend Image = $FRONTEND_IMAGE_URI
+
+  build:
+    commands:
+      - echo "==========================================="
+      - echo "Building Backend Docker Image..."
+      - echo "==========================================="
+
+      - docker build -t $BACKEND_REPO_NAME:latest ./backend
+
+      - docker tag $BACKEND_REPO_NAME:latest $BACKEND_IMAGE_URI:$IMAGE_TAG
+
+      - echo "==========================================="
+      - echo "Building Frontend Docker Image..."
+      - echo "==========================================="
+
+      - docker build -t $FRONTEND_REPO_NAME:latest ./frontend
+
+      - docker tag $FRONTEND_REPO_NAME:latest $FRONTEND_IMAGE_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo "==========================================="
+      - echo "Pushing Backend Image..."
+      - echo "==========================================="
+
+      - docker push $BACKEND_IMAGE_URI:$IMAGE_TAG
+
+      - echo "==========================================="
+      - echo "Pushing Frontend Image..."
+      - echo "==========================================="
+
+      - docker push $FRONTEND_IMAGE_URI:$IMAGE_TAG
+
+      - echo "==========================================="
+      - echo "Generating image definitions..."
+      - echo "==========================================="
+
+      - printf '[{"name":"backend","imageUri":"%s"},{"name":"frontend","imageUri":"%s"}]' "$BACKEND_IMAGE_URI:$IMAGE_TAG" "$FRONTEND_IMAGE_URI:$IMAGE_TAG" > imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
