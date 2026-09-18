@@ -75,6 +75,22 @@ phases:
       - echo "==========================================="
 
       - docker push $FRONTEND_IMAGE_URI:$IMAGE_TAG
+      
+      - echo "==========================================="
+      - echo "Deploying to EC2"
+      - echo "==========================================="
+      - |
+        aws ssm send-command \
+          --instance-ids "i-00971a39f29e012d9" \
+          --document-name "AWS-RunShellScript" \
+          --comment "Deploy latest containers" \
+          --parameters 'commands=[
+            "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 003344631245.dkr.ecr.us-east-1.amazonaws.com",
+            "docker pull 003344631245.dkr.ecr.us-east-1.amazonaws.com/assignment-portal-backend:latest",
+            "docker stop assignment-backend || true",
+            "docker rm assignment-backend || true",
+            "docker run -d --name assignment-backend --network assignment-net --restart unless-stopped -p 5000:5000 -e DATABASE_URL=\"$DATABASE_URL\" -e REDIS_URL=\"redis://assignment-redis:6379/0\" 003344631245.dkr.ecr.us-east-1.amazonaws.com/assignment-portal-backend:latest"
+          ]'
 
       - echo "==========================================="
       - echo "Creating imagedefinitions.json"
