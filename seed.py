@@ -18,7 +18,7 @@ def seed_database():
         db.create_all()
 
         # Check if already seeded
-        if User.query.filter_by(email="admin@portal.edu").first():
+        if User.query.filter_by(email="admin@gmail.com").first():
             print("Database already contains seed data. Exiting.")
             return
 
