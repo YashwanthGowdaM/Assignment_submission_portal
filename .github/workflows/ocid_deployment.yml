@@ -1,0 +1,32 @@
+name: AWS Deployment
+
+# Trigger the workflow on a push to the AWS-OCID branch
+on:
+  push:
+    branches:
+      - AWS-OCID
+
+# Required for requesting the JWT from GitHub's OIDC provider
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Run AWS CLI Command
+        run: |
+          aws sts get-caller-identity
+
