@@ -1,0 +1,67 @@
+name: OIDC Debug
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show GitHub Context
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Workflow: ${{ github.workflow }}"
+
+      - name: Verify OIDC Environment
+        run: |
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL exists:"
+          test -n "$ACTIONS_ID_TOKEN_REQUEST_URL" && echo "YES" || echo "NO"
+
+          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN exists:"
+          test -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" && echo "YES" || echo "NO"
+
+      - name: Get and Decode OIDC Token
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq python3
+
+          RESPONSE=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com")
+
+          echo "Raw response:"
+          echo "$RESPONSE"
+
+          TOKEN=$(echo "$RESPONSE" | jq -r '.value')
+
+          if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+            echo "Failed to obtain OIDC token"
+            exit 1
+          fi
+
+          python3 - "$TOKEN" <<'EOF'
+import base64
+import json
+import sys
+
+token = sys.argv[1]
+
+header, payload, signature = token.split(".")
+
+payload += "=" * (-len(payload) % 4)
+
+decoded = base64.urlsafe_b64decode(payload.encode())
+
+print("\nDecoded JWT Payload:\n")
+print(json.dumps(json.loads(decoded), indent=2))
+EOF
