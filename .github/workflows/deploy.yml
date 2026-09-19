@@ -10,18 +10,17 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  debug:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Print GitHub Context
+        run: |
+          echo "Repository=${{ github.repository }}"
+          echo "Ref=${{ github.ref }}"
+          echo "Workflow=${{ github.workflow }}"
 
-      - name: Verify AWS Authentication
-        run: aws sts get-caller-identity
+      - name: Debug OIDC Token
+        uses: github/actions-oidc-debugger@main
