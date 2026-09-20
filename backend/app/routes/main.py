@@ -15,4 +15,4 @@ def index():
 
 @main_bp.route("/health")
 def health():
-    return jsonify({"status": "healthy", "service": "assignment-group-portal"})
+    return jsonify({"status": "healthy", "service": "Assignment Portal v2"})
