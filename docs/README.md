@@ -330,251 +330,106 @@ Key integrity rules enforced **at the database level** (not just in application 
 
 ## ✅ Prerequisites
 
-Before you begin, make sure you have:
+# AWS Deployment Architecture
 
-- **Ubuntu 22.04 / 24.04** (or any Linux distro with `apt`) — for the provided install script. macOS/Windows users can install Docker Desktop manually instead.
-- **Git**
-- **A Supabase account** (free tier is enough) — used as the managed PostgreSQL database.
-- An open internet connection to pull base images (`python:3.12-slim`, `nginx:1.27-alpine`, `redis:7-alpine`).
+This document describes the AWS infrastructure and CI/CD pipeline used to deploy the application, covering the complete flow from source code to production traffic: **GitHub Actions → OIDC → ECR → ECS Fargate → ALB**.
 
----
+## Table of Contents
 
-## 🚀 Getting Started — Step by Step
+- [Overview](#overview)
+- [Architecture Diagram](#architecture-diagram)
+- [AWS Resources](#aws-resources)
+- [External Services](#external-services)
+- [Deployment Flow](#deployment-flow)
 
-### Step 1 — Clone the repository
-Clone the repository in target ec2 instance [Recommended: atleast ### t2.medium ]
+## Overview
 
-```bash
-git clone https://github.com/YashwanthGowdaM/Assignment_submission_portal.git
-cd Assignment_submission_portal
+The application is deployed as a containerized service on **Amazon ECS (Fargate)**, fronted by an **Application Load Balancer**. Continuous deployment is handled through **GitHub Actions**, which authenticates to AWS securely via **OIDC** (no long-lived access keys), builds and pushes Docker images to **ECR**, and triggers rolling deployments on ECS.
+
+## Architecture Diagram
+
+```
+GitHub Repository
+        │
+        ▼
+GitHub Actions
+        │
+        ▼
+IAM OIDC Provider
+        │
+        ▼
+AWS STS
+        │
+        ▼
+IAM Role
+        │
+        ▼
+Amazon ECR
+        │
+        ▼
+Amazon ECS Cluster
+        │
+        ▼
+ECS Service
+        │
+        ▼
+ECS Task Definition
+        │
+   ┌────┴────┐
+   │         │
+Backend   Redis
+   │
+   ▼
+Application Load Balancer
+   │
+   ▼
+Target Group
+   │
+   ▼
+End Users
 ```
 
-### Step 2 — Install Docker & Docker Compose
+## AWS Resources
 
-The repo ships a helper script that detects whether Docker is already installed and, if not, installs Docker Engine + the Compose plugin using Docker's official APT repository.
+| AWS Resource | Purpose | Major Configuration |
+|---|---|---|
+| **IAM** | Authentication and authorization | Created GitHub OIDC IAM role, attached ECS/ECR permissions, configured IAM policies and trust relationship |
+| **IAM OIDC Identity Provider** | Allows GitHub Actions to authenticate without AWS access keys | Added `token.actions.githubusercontent.com` as the OIDC provider with audience `sts.amazonaws.com` |
+| **AWS STS** | Provides temporary credentials | GitHub Actions assumes the IAM role via `AssumeRoleWithWebIdentity` |
+| **Amazon ECR** | Stores Docker container images | Created private repository; pushes images tagged `latest` and by commit SHA |
+| **Amazon ECS** | Container orchestration | Created ECS cluster, service, and task definitions; configured rolling deployments |
+| **AWS Fargate** | Serverless compute for ECS | Used as the launch type to run containers without managing EC2 instances |
+| **ECS Cluster** | Logical grouping of services | Created `assignment-portal-cluster` |
+| **ECS Service** | Maintains desired running task count | Configured desired count, attached ALB target group, enabled rolling deployments |
+| **ECS Task Definition** | Blueprint for running containers | Configured Backend and Redis containers, CPU/memory, port mappings, environment variables, health checks, CloudWatch logging |
+| **Application Load Balancer (ALB)** | Distributes incoming HTTP traffic | Internet-facing ALB, listener on port 80, forwards to target group |
+| **Target Group** | Routes requests to healthy ECS tasks | IP target type, port 5000, health check path `/health`, success code 200 |
+| **Amazon VPC** | Isolated networking environment | Used existing VPC to host ECS tasks and ALB |
+| **Subnets** | Network segments within the VPC | Public subnets used for ALB and Fargate networking |
+| **Security Groups** | Virtual firewall | Configured ALB and ECS task security groups; allowed HTTP (80) and backend (5000) traffic |
+| **Elastic Network Interface (ENI)** | Network interface for Fargate tasks | Automatically created per ECS task under `awsvpc` networking mode |
+| **Internet Gateway** | Enables internet connectivity | Used by the VPC for ALB and ECS outbound access |
+| **AWS Systems Manager Parameter Store** | Secure configuration storage | Stored `DATABASE_URL` and `REDIS_URL`, injected into ECS tasks as secrets |
+| **Amazon CloudWatch Logs** | Centralized logging | Configured `awslogs` driver for ECS container application and deployment logs |
+| **Amazon CloudWatch** | Monitoring and troubleshooting | Used to review ECS task logs, startup logs, application logs, and deployment events |
 
-```bash
-chmod +x docker-install.sh
-./docker-install.sh
-```
+## External Services
 
-Re-login (or run `newgrp docker`) so your user picks up Docker group permissions, then verify:
-
-```bash
-docker --version
-docker compose version
-docker run hello-world
-```
-
-### Step 3 — Provision a PostgreSQL database on Supabase
-
-1. Sign in at supabase.com and create a new project.
-2. Wait for provisioning to finish.
-3. Go to Project Settings → Database → Connection String and choose the Direct Connection (or Session Pooler) string.
-4. Copy it and substitute your password:
-
-   ```text
-   postgresql://postgres.<project-id>:PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require
-   ```
-
-4. Replace `PASSWORD` with your actual database password. Keep this string handy for Step 6.
-
-### Step 4 — Create an isolated Docker network
-
-All three containers (frontend, backend, Redis) need to talk to each other by name — a user-defined bridge network makes that possible.
-
-```bash
-docker network create assignment-net
-docker network ls
-```
-
-### Step 5 — Build the images
-
-From the project root (where both `backend/` and `frontend/` live):
-
-```bash
-docker build -t assignment-backend:v1 -f backend/Dockerfile .
-docker build -t assignment-frontend:v1 -f frontend/Dockerfile ./frontend
-```
-
-### Step 6 — Start Redis
-
-```bash
-docker run -d \
-  --name assignment-redis \
-  --network assignment-net \
-  redis:7-alpine
-```
-
-### Step 7 — Start the backend
-
-Use your own Supabase connection string from Step 3.
-
-```bash
-docker run -d \
-  --name assignment-backend \
-  --network assignment-net \
-  -p 5000:5000 \
-  -e DATABASE_URL="postgresql://postgres.<project-id>:PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require" \
-  -e REDIS_URL="redis://assignment-redis:6379/0" \
-  assignment-backend:v1
-```
-
-### Step 8 — [Optional] Run migrations & seed demo data (first run only) 
-[Note: Only required if Data seeding not happened properly]
-```bash
-docker exec -it assignment-backend flask db upgrade
-docker exec -it assignment-backend python seed.py
-```
-
-### Step 9 — Start the frontend (Nginx)
-
-```bash
-docker run -d \
-  --name assignment-frontend \
-  --network assignment-net \
-  -p 80:80 \
-  assignment-frontend:v1
-```
-
-### Step 10 — Verify everything is running
-
-```bash
-docker images
-docker ps 
-docker network inspect assignment-net
-docker exec -it assignment-redis redis-cli PING
-docker logs assignment-backend
-docker logs assignment-frontend
-docker logs assignment-redis
-```
-
-Then open your browser to:
-
-| Service | URL |
+| Service | Purpose |
 |---|---|
-| Frontend (Nginx) | `http://localhost` or `http://<your-server-ip>` |
-| Backend API (direct) | `http://localhost:5000` |
-| Health check | `http://localhost:5000/health` |
+| **GitHub** | Source code repository |
+| **GitHub Actions** | CI/CD pipeline automation |
+| **GitHub OIDC** | Secure, keyless authentication with AWS |
+| **Docker** | Containerization of the backend application |
+| **Supabase PostgreSQL** | External PostgreSQL database |
+| **Redis** | In-memory cache, running as an ECS container |
 
-> 🌐 A live instance of this exact setup is running at **[http://129.159.237.133/](http://129.159.237.133/)** — use it to see the finished product before you deploy your own.
+## Deployment Flow
 
----
-
-## 🔐 Environment Variables
-
-Copy `.env.example` to `.env` and fill in real values for local (non-Docker) development:
-
-| Variable | Description | Example |
-|---|---|---|
-| `FLASK_APP` | Entry-point module | `run.py` |
-| `FLASK_ENV` | `development` / `testing` / `production` | `development` |
-| `SECRET_KEY` | Flask session/CSRF signing key | *(generate with `python -c "import secrets; print(secrets.token_hex(32))"`)* |
-| `DATABASE_URL` | Full PostgreSQL connection string (Supabase) | `postgresql://user:pass@host:5432/db` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379/0` |
-| `REDIS_DEFAULT_TIMEOUT` | Default cache TTL in seconds | `300` |
-| `SESSION_COOKIE_SECURE` | Set `True` behind HTTPS in production | `False` (local) |
-| `PERMANENT_SESSION_LIFETIME` | Session lifetime in seconds | `86400` |
-
----
-
-## 🌱 Database Seeding & Demo Accounts
-
-Running `python seed.py` (or the Dockerized equivalent in Step 8) creates a ready-to-explore dataset: one administrator, five students, several assignments in different lifecycle states (open, full, closed), pre-formed groups, and sample submissions with review feedback — so the dashboards aren't empty on first login.
-
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@portal.edu` | `Admin@12345` |
-| Student | `alex@portal.edu` | `Student@12345` |
-| Student | `beatrice@portal.edu` | `Student@12345` |
-
-> ⚠️ These are **demo credentials only**. Change or remove them before exposing any deployment publicly.
-
----
-
-## ⚡ Redis Caching Strategy
-
-`CacheService` (in `backend/app/services/cache_service.py`) wraps every Redis interaction behind a namespaced key scheme (`portal:*`) so that cache and application data never collide, and so cache failures **never crash the app** — every method fails soft and falls back to a live database query.
-
-| What's cached | Cache key pattern | TTL | Invalidated when |
-|---|---|---|---|
-| Admin dashboard stats | `portal:dashboard:admin:global` | 180s | Any assignment or submission changes |
-| Student dashboard stats | `portal:dashboard:student:<user_id>` | 180s | That student joins/leaves a group or submits work |
-| Assignment detail | `portal:assignment:<id>` | 300s | The assignment is edited, closed, or reopened |
-| Admin-wide statistics | `portal:statistics:admin` | 300s | Any assignment or submission changes |
-
-Inspect the cache live:
-
-```bash
-docker exec -it assignment-redis redis-cli
-> MONITOR
-> GET portal:dashboard:admin:global
-```
-
----
-
-## 🧪 Running Tests
-
-The suite covers authentication, assignment CRUD, group capacity/locking edge cases, and the submission review flow, using an in-memory SQLite database (see `TestingConfig` in `config.py`) so tests never touch your real Supabase instance.
-
-```bash
-cd backend
-pip install -r requirements.txt
-pytest ../tests -v
-```
-
----
-
-## ☁️ Deployment on a Cloud VM (Production)
-
-To reproduce the live demo (`http://129.159.237.133/`) on your own VM (Oracle Cloud, AWS EC2, DigitalOcean, etc.):
-
-1. Provision an Ubuntu VM and open **port 80** (and 443 if you plan to add TLS) in its firewall/security group.
-2. SSH in, then repeat **Steps 1–9** above on the VM itself.
-3. Point a domain's DNS `A` record at the VM's public IP, or simply share the raw IP as shown in this project.
-4. (Recommended) Put the Nginx container behind **Certbot / Let's Encrypt** or a managed load balancer for HTTPS.
-5. Set `FLASK_ENV=production` and `SESSION_COOKIE_SECURE=True` on the backend container for hardened cookie settings.
-
----
-
-## 🛠️ Troubleshooting
-
-| Symptom | Likely Cause | Fix |
-|---|---|---|
-| `502 Bad Gateway` from Nginx | Backend container not on `assignment-net`, or not yet ready | `docker network connect assignment-net assignment-backend`, check `docker logs assignment-backend` |
-| Login always fails | Database not migrated/seeded yet | Run `flask db upgrade` then `python seed.py` |
-| Dashboard stats look stale | Redis cache serving old data after a manual DB edit | `docker exec -it assignment-redis redis-cli FLUSHDB` |
-| `sslmode` connection error to Supabase | Missing `?sslmode=require` on `DATABASE_URL` | Append it to the connection string |
-| Containers can't resolve each other by name | Not attached to the same custom network | Confirm all three containers were started with `--network assignment-net` |
-
----
-
-## 🗺️ Roadmap
-
-- [ ] JWT-based API authentication for the React SPA variant
-- [ ] Email delivery for password-reset tokens (currently shown in-app for local dev)
-- [ ] File-upload submissions in addition to repo/docs links
-- [ ] Docker Compose file for one-command local spin-up
-- [ ] CI pipeline running the Pytest suite on every push
-
----
-
-## 🙌 Credits
-
-This project was built and refined with the help of the following AI tools:
-
-| Tool | Contribution |
-|---|---|
-| **ChatGPT** | Prompt optimization & error handling strategy |
-| **Google AI Studio** | Application coding |
-| **Claude AI** | Report writing & error fixes |
-| **Author** | https://github.com/YashwanthGowdaM |
----
-
-<div align="center">
-
-**"From Code to Classroom — Empowering Learning with Technology"**
-
-🔗 **Live Demo:** [http://129.159.237.133/](http://129.159.237.133/)
-
-</div>
+1. Code is pushed to the **GitHub repository**, triggering a **GitHub Actions** workflow.
+2. GitHub Actions authenticates to AWS using the **OIDC provider**, exchanging a GitHub-issued token for temporary credentials via **AWS STS** and an **IAM role** — no static AWS access keys are stored in GitHub.
+3. The workflow builds a Docker image and pushes it to **Amazon ECR**, tagged with both `latest` and the commit SHA.
+4. A new **ECS task definition** revision is registered, referencing the updated image, along with the Backend and Redis containers, environment variables, and secrets pulled from **Parameter Store**.
+5. The **ECS service** performs a rolling deployment onto the **assignment-portal-cluster**, running tasks on **Fargate**.
+6. The **Application Load Balancer** routes incoming traffic on port 80 to the **target group**, which performs health checks against `/health` on port 5000 and forwards traffic only to healthy tasks.
+7. Application and deployment logs are streamed to **CloudWatch Logs** for monitoring and troubleshooting.

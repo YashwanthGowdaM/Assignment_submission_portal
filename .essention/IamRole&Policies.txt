@@ -1,0 +1,52 @@
+Identity_Provider: 
+      aud: token.actions.githubusercontent.com
+      sub: sts.amazonaws.com
+-------------------------------------------------------------------------------------------------------------------------------------------
+Role: GitHub_Role_New_Created
+Usecase: Added in GitHub Sceretes [ARN of this Role]
+      Permission: AdministratorAccess
+      Trust_Relations:
+      {
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Principal": {
+                      "Federated": "arn:aws:iam::003344631245:oidc-provider/token.actions.githubusercontent.com"
+                  },
+                  "Action": "sts:AssumeRoleWithWebIdentity",
+                  "Condition": {
+                      "StringEquals": {
+                          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                      },
+                      "StringLike": {
+                          "token.actions.githubusercontent.com:sub": "repo:YashwanthGowdaM@91324005/Assignment_submission_portal@1361648669:ref:refs/heads/AWS-OCID"
+                      }
+                  }
+              }
+          ]
+      }
+
+--------------------------------------------------------------------------------------------------------------------------------
+role:ecsTaskExecutionRole
+Usecase: Attaching While Task definition
+      Permissions: ["AmazonECSTaskExecutionRolePolicy", "ReadAssignmentParameters"]
+      ReadAssignmentParameters: [Inline Policies]
+      {
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Sid": "ReadApplicationParameters",
+                  "Effect": "Allow",
+                  "Action": [
+                      "ssm:GetParameter",
+                      "ssm:GetParameters"
+                  ],
+                  "Resource": [
+                      "arn:aws:ssm:us-east-1:003344631245:parameter/assignment/backend/*"
+                  ]
+              }
+          ]
+      }
+
+

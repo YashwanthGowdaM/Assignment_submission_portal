@@ -1,0 +1,30 @@
+Step 1:  Create role mentioned earlier
+Step 2:  Create a ECR repo 
+Step 3:  Create a ECS
+      Cluster >> Create Cluster >> Cluster Name, Select Farget Only
+Step 4: Create Task difinition
+     Name: name It
+     launch Type: AWS FARGET
+     Task Role & Task Execution role: ecsTaskExecutionRole
+
+conatiner 1: assignment-redis
+port: 6379 
+Protocol: TCP
+App Protocol - None
+
+
+conatiner 2: backend
+port: 5000
+Protocol: TCP
+App Protocol - HTTP
+Add evnirnoment Variable:
+DB_URL value from ARN of Parameter Store
+Redisu_URL value redis://redis:6379/0
+
+
+Step 5: Create service
+Name Service
+launch type
+Change Replica if needed
+
+Add ALB
