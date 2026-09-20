@@ -1,4 +1,4 @@
-name: AWS Deployment (OIDC Debug)
+name: Deploy Backend to ECS
 
 on:
   push:
@@ -9,85 +9,75 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: assignment-portal-backend
+  ECS_CLUSTER: assignment-portal-cluster
+  ECS_SERVICE: assignment-backend-service
+  TASK_FAMILY: assignment-portal-backend
+  CONTAINER_NAME: backend
+
 jobs:
   deploy:
-    name: Deploy to AWS using OIDC
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      #########################################################
-      # Print GitHub Context
-      #########################################################
-      - name: Print GitHub Context
-        run: |
-          echo "Repository      : ${{ github.repository }}"
-          echo "Repository Owner: ${{ github.repository_owner }}"
-          echo "Branch          : ${{ github.ref_name }}"
-          echo "Ref             : ${{ github.ref }}"
-          echo "Event           : ${{ github.event_name }}"
-          echo "Actor           : ${{ github.actor }}"
-          echo "Workflow        : ${{ github.workflow }}"
-
-      #########################################################
-      # Request OIDC Token
-      #########################################################
-      - name: Get OIDC Token
-        id: idtoken
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const token = await core.getIDToken("sts.amazonaws.com");
-            core.setOutput("jwt", token);
-
-      #########################################################
-      # Decode JWT Payload (Safe)
-      #########################################################
-      - name: Decode JWT Payload
-        env:
-          JWT: ${{ steps.idtoken.outputs.jwt }}
-        run: |
-          python3 <<'EOF'
-          import os
-          import json
-          import base64
-
-          token = os.environ["JWT"]
-
-          payload = token.split(".")[1]
-
-          payload += "=" * (-len(payload) % 4)
-
-          decoded = json.loads(
-              base64.urlsafe_b64decode(payload).decode()
-          )
-
-          print("========== JWT PAYLOAD ==========")
-          print(json.dumps(decoded, indent=2))
-          print("=================================")
-          EOF
-
-      #########################################################
-      # Configure AWS Credentials
-      #########################################################
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      #########################################################
-      # Verify Authentication
-      #########################################################
-      - name: Verify AWS Identity
-        run: |
-          aws sts get-caller-identity
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      #########################################################
-      # List S3 Buckets
-      #########################################################
-      - name: Test AWS Access
+      - name: Build Docker Image
         run: |
-          aws s3 ls
+          docker build \
+            -t $ECR_REPOSITORY:${{ github.sha }} \
+            -t $ECR_REPOSITORY:latest \
+            .
+
+      - name: Tag Image
+        run: |
+          docker tag $ECR_REPOSITORY:${{ github.sha }} \
+          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}
+
+          docker tag $ECR_REPOSITORY:latest \
+          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+
+      - name: Push Image
+        run: |
+          docker push \
+          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}
+
+          docker push \
+          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+
+      - name: Download Current Task Definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition $TASK_FAMILY \
+            --query taskDefinition \
+            > task-definition.json
+
+      - name: Render New Task Definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: backend
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
