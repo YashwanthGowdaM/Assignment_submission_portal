@@ -13,7 +13,7 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: assignment-portal-backend
   ECS_CLUSTER: assignment-portal-cluster
-  ECS_SERVICE: assignment-backend-service
+  ECS_SERVICE: assignment-portal-backend-service
   TASK_FAMILY: assignment-portal-backend
   CONTAINER_NAME: backend
 
