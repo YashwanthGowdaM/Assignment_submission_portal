@@ -39,6 +39,7 @@ jobs:
       - name: Build Docker Image
         run: |
           docker build \
+            -f backend/Dockerfile \
             -t $ECR_REPOSITORY:${{ github.sha }} \
             -t $ECR_REPOSITORY:latest \
             .
