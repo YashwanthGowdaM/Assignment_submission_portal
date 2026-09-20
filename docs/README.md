@@ -1,6 +1,5 @@
 # 🎓 Assignment Submission Portal
 
-
 **A full-stack, containerized platform for managing group assignments, submissions, and academic review workflows.**
 
 Built with **Flask**, **PostgreSQL**, **Redis**, **Docker**, and a **React + TypeScript** front-end layer.
