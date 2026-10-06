@@ -1,9 +1,18 @@
-name: Deploy Backend to ECS
+name: Build Images & Update K8s Manifests
 
 on:
   push:
     branches:
-      - AWS-OCID
+      - K8s-deployment
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "database/**"
+      - "migrations/**"
+      - "requirements.txt"
+      - "alembic.ini"
+      - "entrypoint.sh"
+      - "seed.py"
 
 permissions:
   id-token: write
@@ -11,20 +20,29 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: assignment-portal-backend
-  ECS_CLUSTER: assignment-portal-cluster
-  ECS_SERVICE: assignment-portal-backend-service
-  TASK_FAMILY: assignment-portal-backend
-  CONTAINER_NAME: backend
+
+  BACKEND_ECR_REPOSITORY: assignment-portal-backend
+  FRONTEND_ECR_REPOSITORY: assignment-portal-frontend
+
+  MANIFEST_REPO: YashwanthGowdaM/assignment-portal-k8s
+  MANIFEST_BRANCH: main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
 
-      - name: Checkout Repository
+      #########################################################
+      # Checkout Application Repository
+      #########################################################
+
+      - name: Checkout Source Repository
         uses: actions/checkout@v4
+
+      #########################################################
+      # Configure AWS Credentials (OIDC)
+      #########################################################
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -32,53 +50,129 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      #########################################################
+      # Login to Amazon ECR
+      #########################################################
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker Image
+      #########################################################
+      # Build Backend
+      #########################################################
+
+      - name: Build Backend Docker Image
         run: |
           docker build \
             -f backend/Dockerfile \
-            -t $ECR_REPOSITORY:${{ github.sha }} \
-            -t $ECR_REPOSITORY:latest \
+            -t $BACKEND_ECR_REPOSITORY:${{ github.sha }} \
             .
 
-      - name: Tag Image
+      #########################################################
+      # Tag Backend
+      #########################################################
+
+      - name: Tag Backend Image
         run: |
-          docker tag $ECR_REPOSITORY:${{ github.sha }} \
-          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}
+          docker tag \
+          $BACKEND_ECR_REPOSITORY:${{ github.sha }} \
+          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_ECR_REPOSITORY:${{ github.sha }}
 
-          docker tag $ECR_REPOSITORY:latest \
-          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+      #########################################################
+      # Push Backend
+      #########################################################
 
-      - name: Push Image
+      - name: Push Backend Image
         run: |
           docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_ECR_REPOSITORY:${{ github.sha }}
 
-          docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+      #########################################################
+      # Build Frontend
+      #########################################################
 
-      - name: Download Current Task Definition
+      - name: Build Frontend Docker Image
         run: |
-          aws ecs describe-task-definition \
-            --task-definition $TASK_FAMILY \
-            --query taskDefinition \
-            > task-definition.json
+          docker build \
+            -f frontend/Dockerfile \
+            -t $FRONTEND_ECR_REPOSITORY:${{ github.sha }} \
+            ./frontend
 
-      - name: Render New Task Definition
-        id: render
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: backend
-          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+      #########################################################
+      # Tag Frontend
+      #########################################################
 
-      - name: Deploy to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.render.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+      - name: Tag Frontend Image
+        run: |
+          docker tag \
+          $FRONTEND_ECR_REPOSITORY:${{ github.sha }} \
+          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_ECR_REPOSITORY:${{ github.sha }}
+
+      #########################################################
+      # Push Frontend
+      #########################################################
+
+      - name: Push Frontend Image
+        run: |
+          docker push \
+          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_ECR_REPOSITORY:${{ github.sha }}
+
+      #########################################################
+      # Clone Manifest Repository
+      #########################################################
+
+      - name: Clone Manifest Repository
+        run: |
+          git clone \
+          https://x-access-token:${{ secrets.K8S_REPO_PAT }}@github.com/${{ env.MANIFEST_REPO }}.git
+
+      #########################################################
+      # Update Backend Deployment
+      #########################################################
+
+      - name: Update Backend Deployment Image
+        run: |
+          sed -i "s|image: .*assignment-portal-backend:.*|image: 003344631245.dkr.ecr.${AWS_REGION}.amazonaws.com/${BACKEND_ECR_REPOSITORY}:${{ github.sha }}|g" \
+          assignment-portal-k8s/manifest_files/backend/deployment.yaml
+
+      #########################################################
+      # Update Frontend Deployment
+      #########################################################
+
+      - name: Update Frontend Deployment Image
+        run: |
+          sed -i "s|image: .*assignment-portal-frontend:.*|image: 003344631245.dkr.ecr.${AWS_REGION}.amazonaws.com/${FRONTEND_ECR_REPOSITORY}:${{ github.sha }}|g" \
+          assignment-portal-k8s/manifest_files/frontend/deployment.yaml
+
+      #########################################################
+      # Commit Changes
+      #########################################################
+
+      - name: Commit Manifest Changes
+        run: |
+          cd assignment-portal-k8s
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout ${MANIFEST_BRANCH}
+
+          git add manifest_files/backend/deployment.yaml
+          git add manifest_files/frontend/deployment.yaml
+
+          if git diff --cached --quiet; then
+            echo "No manifest changes."
+            exit 0
+          fi
+
+          git commit -m "Update images to ${{ github.sha }}"
+
+      #########################################################
+      # Push Changes
+      #########################################################
+
+      - name: Push Manifest Changes
+        run: |
+          cd assignment-portal-k8s
+          git push origin ${MANIFEST_BRANCH}
