@@ -13,7 +13,9 @@ on:
       - "alembic.ini"
       - "entrypoint.sh"
       - "seed.py"
-
+      
+  workflow_dispatch:
+  
 permissions:
   id-token: write
   contents: read
