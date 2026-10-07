@@ -1,7 +1,10 @@
 import os
 import logging
 from datetime import datetime
+
 from flask import Flask
+from prometheus_flask_exporter import PrometheusMetrics
+
 from config import config_by_name
 from app.extensions import db, migrate, login_manager, csrf, init_redis
 from app.utilities.helpers import format_datetime, status_badge_class
@@ -17,29 +20,51 @@ logger = logging.getLogger(__name__)
 
 def create_app(config_name=None) -> Flask:
     """Application factory for Assignment Group Portal."""
+
     if not config_name:
         config_name = os.getenv("FLASK_ENV", "development").lower()
 
-#    app = Flask(__name__,template_folder="../../frontend/templates",static_folder="../../frontend/static")
-    app = Flask(__name__,template_folder="/frontend/templates",static_folder="/frontend/static")
+    app = Flask(
+        __name__,
+        template_folder="/frontend/templates",
+        static_folder="/frontend/static",
+    )
+
     config_class = config_by_name.get(config_name, config_by_name["default"])
     app.config.from_object(config_class)
 
-    # Initialize extensions
+    # ----------------------------------------------------
+    # Prometheus Metrics
+    # ----------------------------------------------------
+    metrics = PrometheusMetrics(app)
+
+    metrics.info(
+        "assignment_portal",
+        "Assignment Group Portal",
+        version="1.0.0",
+    )
+
+    # ----------------------------------------------------
+    # Initialize Extensions
+    # ----------------------------------------------------
     db.init_app(app)
     migrate.init_app(app, db, directory="database/migrations")
     login_manager.init_app(app)
     csrf.init_app(app)
 
-    # Initialize Redis with connection check & mock fallback
+    # Initialize Redis
     with app.app_context():
         init_redis(app)
 
-    # Register template filters
+    # ----------------------------------------------------
+    # Template Filters
+    # ----------------------------------------------------
     app.jinja_env.filters["datetime"] = format_datetime
     app.jinja_env.filters["status_badge"] = status_badge_class
 
-    # Register context processors
+    # ----------------------------------------------------
+    # Global Variables
+    # ----------------------------------------------------
     @app.context_processor
     def inject_global_vars():
         return {
@@ -47,14 +72,21 @@ def create_app(config_name=None) -> Flask:
             "current_year": datetime.now().year,
         }
 
-    # Register custom error handlers
+    # ----------------------------------------------------
+    # Error Handlers
+    # ----------------------------------------------------
     register_error_handlers(app)
 
-    # Register Blueprints
+    # ----------------------------------------------------
+    # Blueprints
+    # ----------------------------------------------------
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(student_bp)
 
-    logger.info(f"Initialized {app.config.get('APP_NAME')} with config '{config_name}'")
+    logger.info(
+        f"Initialized {app.config.get('APP_NAME')} with config '{config_name}'"
+    )
+
     return app
