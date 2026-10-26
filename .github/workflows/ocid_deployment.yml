@@ -79,6 +79,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: sonarqube   # runs after the scan; still runs if the scan job failed (see continue-on-error above)
 
+    # Prevent two runs from pushing to the manifest branch at the same time
+    concurrency:
+      group: manifest-update
+      cancel-in-progress: false
+
     steps:
 
       #########################################################
@@ -179,7 +184,7 @@ jobs:
           path: trivy-reports/
 
       #########################################################
-      # Tag & Push (same as before)
+      # Tag & Push
       #########################################################
 
       - name: Tag Backend Image
@@ -205,13 +210,26 @@ jobs:
           ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_ECR_REPOSITORY:${{ github.sha }}
 
       #########################################################
-      # Clone Manifest Repository
+      # Clone Manifest Repository directly on the target branch
+      # (FIX: previously it cloned the default branch, edited files with sed,
+      #  and then `git checkout` of another branch failed because of the
+      #  uncommitted local changes. Now we clone the right branch first.)
       #########################################################
 
       - name: Clone Manifest Repository
         run: |
           git clone \
-          https://x-access-token:${{ secrets.K8S_REPO_PAT }}@github.com/${{ env.MANIFEST_REPO }}.git
+            --branch "${MANIFEST_BRANCH}" \
+            --single-branch \
+            "https://x-access-token:${{ secrets.K8S_REPO_PAT }}@github.com/${MANIFEST_REPO}.git"
+
+          # Safety check: refuse to continue unless we are on the manifest branch
+          cd assignment-portal-k8s
+          CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          if [ "${CURRENT_BRANCH}" != "${MANIFEST_BRANCH}" ]; then
+            echo "Expected branch '${MANIFEST_BRANCH}' but on '${CURRENT_BRANCH}'"
+            exit 1
+          fi
 
       #########################################################
       # Update Backend Deployment
@@ -242,8 +260,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git checkout ${MANIFEST_BRANCH}
-
           git add manifest_files/backend/deployment.yaml
           git add manifest_files/frontend/deployment.yaml
 
@@ -255,10 +271,12 @@ jobs:
           git commit -m "Update images to ${{ github.sha }}"
 
       #########################################################
-      # Push Changes
+      # Push Changes (rebase first in case the branch moved)
       #########################################################
 
       - name: Push Manifest Changes
         run: |
           cd assignment-portal-k8s
-          git push origin ${MANIFEST_BRANCH}
+          git pull --rebase origin "${MANIFEST_BRANCH}"
+          # Explicit refspec: only ever pushes to the manifest branch
+          git push origin "HEAD:refs/heads/${MANIFEST_BRANCH}"
