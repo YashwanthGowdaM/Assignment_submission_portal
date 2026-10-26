@@ -116,6 +116,11 @@ jobs:
             -t $BACKEND_ECR_REPOSITORY:${{ github.sha }} \
             .
 
+      - name: Show Dependency Tree
+        run: |
+          docker run --rm $BACKEND_ECR_REPOSITORY:${{ github.sha }} \
+            sh -c "pip install pipdeptree && pipdeptree"
+
       - name: Build Frontend Docker Image
         run: |
           docker build \
