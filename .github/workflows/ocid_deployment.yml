@@ -30,7 +30,7 @@ env:
   FRONTEND_ECR_REPOSITORY: assignment-portal-frontend
 
   MANIFEST_REPO: YashwanthGowdaM/assignment-portal-k8s
-  MANIFEST_BRANCH: main
+  MANIFEST_BRANCH: Splunk&FluentBit
 
   # Trivy is run from its official container image, pinned to an exact version.
   # (We avoid the aquasecurity/trivy-action GitHub Action: its version tags were
