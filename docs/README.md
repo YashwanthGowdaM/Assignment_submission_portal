@@ -186,7 +186,7 @@ File: `.github/workflows/ocid_deployment.yml` — workflow name **"Build Images 
 | # | Step | What it does |
 |---|---|---|
 | 1 | Checkout Source Repository | `actions/checkout@v4` |
-| 2 | Configure AWS Credentials | `aws-actions/configure-aws-credentials@v6`, assumes `secrets.AWS_ROLE_ARN` via OIDC |
+| 2 | Configure AWS Credentials | `aws-actions/configure-aws-credentials@v6`, assumes `secrets.AWS_ROLE_ARN_SNQ` via OIDC |
 | 3 | Login to Amazon ECR | `aws-actions/amazon-ecr-login@v2` |
 | 4–6 | Backend build / tag / push | `docker build -f backend/Dockerfile .` → tag `<registry>/assignment-portal-backend:${{ github.sha }}` → push |
 | 7–9 | Frontend build / tag / push | `docker build -f frontend/Dockerfile ./frontend` → tag `<registry>/assignment-portal-frontend:${{ github.sha }}` → push |
@@ -205,7 +205,7 @@ File: `.github/workflows/ocid_deployment.yml` — workflow name **"Build Images 
 
 | Secret | Used for |
 |---|---|
-| `AWS_ROLE_ARN` | IAM role assumed through GitHub OIDC |
+| `AWS_ROLE_ARN_SNQ` | IAM role assumed through GitHub OIDC |
 | `K8S_REPO_PAT` | Personal access token to clone/push the manifest repository |
 
 ---
@@ -215,7 +215,7 @@ File: `.github/workflows/ocid_deployment.yml` — workflow name **"Build Images 
 The workflow uses **GitHub OIDC** (no static AWS keys). `.essential/IamRole&Policies.txt` documents:
 
 - Identity provider: `token.actions.githubusercontent.com`
-- Role: `GitHub_Role_New_Created` (its ARN is stored in the `AWS_ROLE_ARN` secret)
+- Role: `GitHub_Role_New_Created` (its ARN is stored in the `AWS_ROLE_ARN_SNQ` secret)
 - Permission attached to that role: `AdministratorAccess`
 - Trust policy: `sts:AssumeRoleWithWebIdentity` for the GitHub OIDC provider (see [Observations](#15-observations-from-the-code))
 
@@ -310,7 +310,7 @@ The CI workflow does **not** include a test step.
 git push (branch K8s-deployment)
         │
         ▼
-GitHub Actions ──OIDC──► AWS (role from AWS_ROLE_ARN)
+GitHub Actions ──OIDC──► AWS (role from AWS_ROLE_ARN_SNQ)
         │
         ├─► build + push  assignment-portal-backend:<sha>   ─┐
         └─► build + push  assignment-portal-frontend:<sha>  ─┤► Amazon ECR (us-east-1)

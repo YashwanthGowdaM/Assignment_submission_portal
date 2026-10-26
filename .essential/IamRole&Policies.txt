@@ -20,7 +20,7 @@ Usecase: Added in GitHub Sceretes [ARN of this Role]
                           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                       },
                       "StringLike": {
-                          "token.actions.githubusercontent.com:sub": "repo:YashwanthGowdaM@91324005/Assignment_submission_portal@1361648669:ref:refs/heads/AWS-OCID"
+                          "token.actions.githubusercontent.com:sub": "repo:YashwanthGowdaM@91324005/Assignment_submission_portal@1361648669:ref:refs/heads/K8sDeploymentWithSonarQubeAndTrivia"
                       }
                   }
               }

@@ -96,7 +96,7 @@ Repo -> **Settings -> Secrets and variables -> Actions -> New repository secret*
 | `SONAR_TOKEN` | the token from 2.2 |
 | `SONAR_HOST_URL` | `http://<elastic-ip>:9000` (no trailing slash) |
 
-(`AWS_ROLE_ARN` and `K8S_REPO_PAT` already exist.)
+(`AWS_ROLE_ARN_SNQ` and `K8S_REPO_PAT` already exist.)
 
 ---
 
