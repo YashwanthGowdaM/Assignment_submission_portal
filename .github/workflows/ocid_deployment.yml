@@ -133,8 +133,8 @@ jobs:
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$PWD/trivy-reports:/reports" \
-            -e TRIVY_DB_REPOSITORY=public.ecr.aws/aquasecurity/trivy-db:2 \
-            public.ecr.aws/aquasecurity/trivy:${TRIVY_VERSION} image \
+            -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2 \
+            docker.io/aquasec/trivy:${TRIVY_VERSION} image \
               --scanners vuln \
               --severity HIGH,CRITICAL \
               --ignore-unfixed \
@@ -148,8 +148,8 @@ jobs:
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$PWD/trivy-reports:/reports" \
-            -e TRIVY_DB_REPOSITORY=public.ecr.aws/aquasecurity/trivy-db:2 \
-            public.ecr.aws/aquasecurity/trivy:${TRIVY_VERSION} image \
+            -e TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db:2 \
+            docker.io/aquasec/trivy:${TRIVY_VERSION} image \
               --scanners vuln \
               --severity HIGH,CRITICAL \
               --ignore-unfixed \
