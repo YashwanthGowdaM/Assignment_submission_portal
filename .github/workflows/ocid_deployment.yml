@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - K8sDeploymentWithSonarQubeAndTrivia
-  workflow_dispatch:
-  
     paths:
       - "backend/**"
       - "frontend/**"
