@@ -15,6 +15,7 @@ on:
       - "entrypoint.sh"
       - "seed.py"
       - "sonar-project.properties"
+      - ".github/workflows/dummy_trigger.txt"
 
   workflow_dispatch:
 
