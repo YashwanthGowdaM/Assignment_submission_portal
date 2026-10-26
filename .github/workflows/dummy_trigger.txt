@@ -6,3 +6,5 @@ updated sonarqube url to env
 
 #updated Splunk&FluentBit instead of main
 #finaly all worked
+
+fixed the issue sonarqube
