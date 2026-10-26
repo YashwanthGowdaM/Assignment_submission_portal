@@ -1,4 +1,5 @@
-FROM nginx:1.27-alpine
+FROM nginx:alpine
+RUN apk update && apk upgrade --no-cache
 
 WORKDIR /usr/share/nginx/html
 
